@@ -15,6 +15,7 @@
 
 """Splits related API."""
 
+import abc
 import typing
 from typing import Any, List, Optional, Union
 
@@ -25,6 +26,8 @@ from tensorflow_datasets.core import tfrecords_reader
 from tensorflow_datasets.core import utils
 from tensorflow_datasets.core.utils import shard_utils
 from tensorflow_metadata.proto.v0 import statistics_pb2
+
+SplitArg = Union[str, "Split", "LazySplit", tfrecords_reader.ReadInstruction]
 
 
 @dataclasses.dataclass(eq=False, frozen=True)
@@ -203,6 +206,43 @@ if typing.TYPE_CHECKING:
   # For type checking, `tfds.Split` is an alias for `str` with additional
   # `.TRAIN`, `.TEST`,... attributes. All strings are valid split type.
   Split = Union[Split, str]
+
+
+class LazySplit(abc.ABC):
+  """Split which is lazyly constructed.
+
+  This allow to dynamically compute the splits using TFDS metadata, for example
+  to compute precise slice of the data.
+
+  Here is a dummy example:
+
+  ```python
+  @dataclasses.dataclass
+  class MySplit(LazySplit):
+    split_name: str
+
+    def resolve(self, split_infos: tfds.core.SplitDict) -> str:
+      num_examples = split_infos[self.split_name].num_examples
+      return f'{self.split_name}[:{num_examples / 2}]'
+
+  ds = tfds.load(..., split=MySplit('train'))
+  ```
+
+  """
+
+  @abc.abstractmethod
+  def resolve(
+      self,
+      split_infos: "SplitDict",
+  ) -> SplitArg:
+    """Resolve the lazy split into actual value.
+
+    Args:
+      split_infos: The splits info (containing num example, num shards,...)
+
+    Returns:
+      The split values (either `str` or `ReadInstruction`)
+    """
 
 
 class SplitDict(utils.NonMutableDict):
